@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Audiobook Copilot</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        /* Increase base sizes */
+        :root {
+            --base-font-size: min(8vw, 32px);     /* Doubled from 4vw/16px */
+            --button-size: min(16vw, 80px);       /* Doubled from 8vw/40px */
+            --control-padding: min(8vw, 30px);     /* Doubled padding */
+            --standard-font: 25px;
+        }
+
+        /* Update base font styles */
+        body, button, input, div, span, p, h1 {
+            font-family: monospace;
+            font-weight: normal;
+            font-size: var(--standard-font);
+        }
+
+        h1 {
+            font-size: calc(var(--base-font-size) * 1.5);
+            margin: calc(var(--base-font-size) * 2) 0;
+        }
+
+        /* Responsive controls */
+        .controls button {
+            width: var(--button-size);
+            height: var(--button-size);
+            padding: 0;
+            margin: 0 calc(var(--base-font-size) * 0.5);
+        }
+
+        .controls button i {
+            font-size: var(--standard-font);
+        }
+
+        /* Larger skip buttons */
+        .skip-btn {
+            width: calc(var(--button-size) * 2) !important;
+            height: calc(var(--button-size) * 1.2) !important;
+            font-size: calc(var(--base-font-size) * 1.2) !important;
+        }
+
+        /* Larger speed buttons */
+        .speed-btn {
+            padding: var(--control-padding);
+            font-size: calc(var(--base-font-size) * 1.1);
+            min-width: 120px;  /* Doubled from 60px */
+        }
+
+        /* Mobile adjustments */
+        @media (max-width: 768px) {
+            :root {
+                --base-font-size: 36px;    /* Doubled from 18px */
+                --button-size: 100px;      /* Doubled from 50px */
+                --control-padding: 40px;    /* Doubled from 20px */
+            }
+
+            .progress {
+                height: 32px;  /* Doubled */
+            }
+
+            .progress::-webkit-slider-thumb {
+                width: 64px;   /* Doubled */
+                height: 64px;
+            }
+        }
+
+        /* Very small screens */
+        @media (max-width: 480px) {
+            :root {
+                --base-font-size: 40px;    /* Doubled from 20px */
+                --button-size: 120px;      /* Doubled from 60px */
+                --control-padding: 50px;    /* Doubled from 25px */
+            }
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            max-width: none;  /* Remove max-width constraint */
+            margin: 0 auto;
+            padding: 20px 10px;  /* Reduce horizontal padding */
+            text-align: center;
+            background-color: #f0f0f0;  /* Keep the grey background */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            box-sizing: border-box;
+            min-height: 100vh;  /* Full viewport height */
+        }
+        .controls {
+            margin: 20px 0;
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+        }
+        button {
+            background-color: transparent;  /* Remove blue background */
+            color: black;                   /* Black text */
+            border: 1px solid #ddd;         /* Light border */
+            padding: 10px 20px;
+            margin: 0 10px;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+        button:hover {
+            background-color: rgba(0,0,0,0.05);  /* Subtle hover effect */
+        }
+        button:disabled {
+            background-color: transparent;
+            color: #999;
+            border-color: #eee;
+            cursor: not-allowed;
+        }
+        #status {
+            margin: 20px 0;
+            padding: 10px;
+            border-radius: 5px;
+            background-color: transparent;  /* Remove background */
+        }
+        .recording {
+            color: red;
+            display: none;
+        }
+        .listening-indicator {
+            display: none;
+            margin: 20px;
+            padding: 15px;
+            background-color: #ff4444;
+            color: white;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: pulse 1.5s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); }
+        }
+        
+        /* Larger message log */
+        .message-log {
+            width: 100%;
+            height: 400px;  /* Doubled from 200px */
+            margin: 20px 0;
+            padding: 10px;
+            overflow-y: auto;
+            text-align: left;
+            background: rgba(0,0,0,0.05);  /* Subtle background */
+            border-radius: 5px;
+            font-size: calc(var(--base-font-size) * 1.1);
+        }
+        
+        .message-log p {
+            margin: 5px 0;
+            padding: 5px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        /* Center progress container */
+        .progress-container {
+            width: 90%;  /* Reduced from 95% */
+            max-width: 1800px;
+            margin: 20px auto;
+            padding: 0 10px;  /* Add some padding */
+            box-sizing: border-box;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+        }
+        
+        /* Make progress bar larger */
+        .progress {
+            flex-grow: 1;
+            height: 24px;
+            -webkit-appearance: none;
+            background: #ddd;
+            border-radius: 12px;
+            cursor: pointer;
+            min-width: 600px;  /* Reduced from 800px */
+            max-width: 1600px;  /* Add max-width */
+        }
+        
+        /* Larger drag handle */
+        .progress::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 48px;
+            height: 48px;
+            background: #007bff;
+            border-radius: 50%;
+            cursor: pointer;
+            margin-top: -12px;  /* Center vertically */
+        }
+        
+        /* Adjust for mobile */
+        @media (max-width: 768px) {
+            .progress-container {
+                width: 100%;
+                max-width: none;
+            }
+
+            .progress {
+                min-width: unset;  /* Remove min-width on mobile */
+            }
+        }
+        
+        #currentTime, #duration {
+            min-width: 50px;
+        }
+        
+        .bookmarks-container {
+            margin: 20px auto;
+            width: 80%;
+            text-align: left;
+            padding: 20px;
+            border-radius: 10px;
+        }
+        
+        .bookmark-form {
+            margin-bottom: 15px;
+            display: flex;
+            gap: 10px;
+        }
+        
+        .bookmark-form input {
+            flex-grow: 1;
+            padding: 8px;
+            border: none;  /* Remove border */
+            background: rgba(0,0,0,0.1);  /* Subtle background for input */
+            border-radius: 5px;
+        }
+        
+        .bookmarks-list {
+            max-height: 400px;  /* Doubled from 200px */
+            overflow-y: auto;
+            padding: 10px;
+            border: none;  /* Remove border */
+        }
+        
+        .bookmark-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px;  /* Doubled from 8px */
+            border-bottom: 1px solid #eee;
+        }
+        
+        .bookmark-item:last-child {
+            border-bottom: none;
+        }
+        
+        .bookmark-controls {
+            display: flex;
+            gap: 5px;
+        }
+        
+        .bookmark-controls button {
+            padding: calc(var(--control-padding) * 0.8);
+            font-size: var(--standard-font);
+        }
+        
+        .speed-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding-top: 10px;
+            width: 100%;
+            justify-content: center;
+        }
+        
+        .speed-buttons {
+            display: flex;
+            gap: 5px;
+        }
+        
+        .skip-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-grow: 1;
+        }
+        
+        /* Center main controls */
+        .main-controls {
+            width: 90%;  /* Reduced from 95% */
+            max-width: 1800px;
+            margin: 20px auto;
+            padding: 0 10px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .status-bar {
+            display: flex;
+            flex-direction: column;
+            gap: 0;  /* Remove gap between elements */
+            margin-bottom: 10px;
+        }
+
+        /* Larger status display */
+        .status-line {
+            font-size: var(--standard-font);
+            line-height: 1.5;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            background-color: #f0f0f0;
+            padding: 40px;     /* Doubled from 20px */
+            border-radius: 10px;
+            text-align: center;
+            max-width: 800px;  /* Doubled from 400px */
+            margin: 20px;
+            border: none;  /* Remove border */
+        }
+
+        .modal.show {
+            display: flex;
+        }
+
+        /* Style for disabled progress bar */
+        .progress:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        /* Update container widths */
+        .main-controls, .message-log, .bookmarks-container {
+            width: 100%;
+            margin: 0 0 20px 0;
+        }
+
+        /* Update bookmarks container */
+        .bookmarks-container {
+            border-top: 1px solid rgba(0,0,0,0.1);
+            padding-top: 20px;
+        }
+
+        .bookmarks-list {
+            max-height: 400px;  /* Doubled from 200px */
+            overflow-y: auto;
+        }
+
+        /* Remove old two-column styles */
+        .two-column-layout, .column {
+            display: block;
+            gap: 0;
+            height: auto;
+        }
+
+        /* Move listening indicator inside the left column */
+        .listening-indicator {
+            margin: 10px auto;
+        }
+
+        /* Separate icon styles */
+        .fas {
+            font-family: "Font Awesome 6 Free" !important;  /* Force Font Awesome font */
+            font-weight: 900 !important;  /* Required for solid icons */
+            font-size: var(--standard-font);
+        }
+
+        /* Bookmark icon */
+        .fa-bookmark {
+            font-size: var(--standard-font);
+        }
+
+        /* Center everything */
+        .main-column {
+            width: 90%;  /* Reduced from 95% */
+            max-width: 1800px;  /* Added max-width constraint */
+            padding: 0 20px;  /* Add padding */
+            box-sizing: border-box;  /* Include padding in width */
+        }
+    </style>
+</head>
+<body>
+    <h1>AI Audiobook Assistant</h1>
+    
+    <div class="main-column">
+        <!-- Playback controls -->
+        <div class="main-controls">
+            <div class="controls">
+                <button id="playBtn"><i class="fas fa-play"></i></button>
+                <button id="pauseBtn"><i class="fas fa-pause"></i></button>
+                <button id="questionBtn"><i class="fas fa-question"></i></button>
+            </div>
+
+            <div class="progress-container">
+                <div class="skip-controls">
+                    <button class="skip-btn" id="skipBackward">-30</button>
+                    <input type="range" id="progressBar" value="0" class="progress">
+                    <button class="skip-btn" id="skipForward">+30</button>
+                </div>
+            </div>
+
+            <div class="speed-controls">
+                <div class="speed-buttons">
+                    <button class="speed-btn active" data-speed="1.0">1x</button>
+                    <button class="speed-btn" data-speed="1.25" disabled>1.25x</button>
+                    <button class="speed-btn" data-speed="1.5" disabled>1.5x</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Message log -->
+        <div class="message-log" id="messageLog">
+            <div class="status-bar">
+                <div class="status-line">
+                    <span id="currentTime">0:00</span> / <span id="duration">0:00</span><br><span id="status">Status: Stopped</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bookmarks section -->
+        <div class="bookmarks-container">
+            <div class="bookmark-form">
+                <input type="text" id="bookmarkTitle" placeholder="Bookmark title">
+                <button id="addBookmarkBtn">
+                    <i class="fas fa-bookmark"></i> Add
+                </button>
+            </div>
+            <div class="bookmarks-list" id="bookmarksList">
+                <!-- Bookmarks will be added here dynamically -->
+            </div>
+        </div>
+    </div>
+
+    <div class="listening-indicator" id="listeningIndicator">●</div>
+    
+    <div id="recording" class="recording">
+        Recording question...
+    </div>
+
+    <!-- Add the modal HTML after the main-controls div -->
+    <div id="dragModal" class="modal">
+        <div class="modal-content">
+            <p>Please pause the audio before seeking to a different position.</p>
+            <button id="closeModal">OK</button>
+        </div>
+    </div>
+
+    <!-- Add audio element after the controls -->
+    <audio id="audioPlayer" style="display: none;">
+        <source src="/audio/output_small.mp3" type="audio/mpeg">
+    </audio>
+
+    <script>
+        const socket = io();
+        const status = document.getElementById('status');
+        const recording = document.getElementById('recording');
+        const listeningIndicator = document.getElementById('listeningIndicator');
+        const messageLog = document.getElementById('messageLog');
+        
+        socket.on('connect', () => {
+            console.log('Connected to server');
+        });
+
+        const playBtn = document.getElementById('playBtn');
+        const pauseBtn = document.getElementById('pauseBtn');
+        const questionBtn = document.getElementById('questionBtn');
+
+        function updateButtonStates(state) {
+            switch(state) {
+                case 'playing':
+                    playBtn.disabled = true;
+                    pauseBtn.disabled = false;
+                    questionBtn.disabled = false;
+                    break;
+                case 'paused':
+                    playBtn.disabled = false;
+                    pauseBtn.disabled = true;
+                    questionBtn.disabled = false;
+                    break;
+                case 'questioning':
+                    playBtn.disabled = false;
+                    pauseBtn.disabled = true;
+                    questionBtn.disabled = true;
+                    break;
+                case 'stopped':
+                    playBtn.disabled = false;
+                    pauseBtn.disabled = true;
+                    questionBtn.disabled = false;
+                    break;
+            }
+        }
+
+        function updateStatus(text) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = text;
+        }
+
+        const audioPlayer = document.getElementById('audioPlayer');
+        
+        // Add these event listeners for the audio player
+        audioPlayer.addEventListener('play', () => {
+            playback_active = true;
+            updateButtonStates('playing');
+        });
+
+        audioPlayer.addEventListener('pause', () => {
+            playback_active = false;
+            updateButtonStates('paused');
+        });
+
+        audioPlayer.addEventListener('ended', () => {
+            playback_active = false;
+            updateButtonStates('stopped');
+        });
+
+        // Update the play button handler
+        playBtn.addEventListener('click', () => {
+            playback_active = true;
+            progressBar.disabled = true;
+            audioPlayer.play();
+            socket.emit('play', {}, (response) => {
+                updateStatus(`Status: ${response.status}`);
+            });
+        });
+
+        // Update the pause button handler
+        pauseBtn.addEventListener('click', () => {
+            playback_active = false;
+            progressBar.disabled = false;
+            audioPlayer.pause();
+            socket.emit('pause', {}, (response) => {
+                updateStatus(`Status: ${response.status}`);
+            });
+        });
+
+        // Update time tracking and seeking
+        audioPlayer.addEventListener('timeupdate', () => {
+            currentTimeDisplay.textContent = formatTime(audioPlayer.currentTime);
+            if (!progressBar.disabled) {
+                progressBar.value = audioPlayer.currentTime;
+            }
+        });
+
+        audioPlayer.addEventListener('loadedmetadata', () => {
+            audioDuration = audioPlayer.duration;
+            progressBar.max = audioDuration;
+            durationDisplay.textContent = formatTime(audioDuration);
+        });
+
+        // Handle speed changes
+        socket.on('speed_file_ready', (data) => {
+            const speed = data.speed;
+            audioPlayer.src = `/audio/output_small_${speed}x.mp3`;
+            audioPlayer.playbackRate = speed;
+        });
+
+        // Handle AI responses using main audio player
+        socket.on('play_response', (data) => {
+            addMessage("Playing AI response...");
+            
+            // Save current audiobook position
+            const bookmarkPosition = audioPlayer.currentTime;
+            
+            // Switch to response audio
+            audioPlayer.src = `/response_audio?t=${data.timestamp}`;
+            audioPlayer.playbackRate = 1.25;
+
+            // When response finishes, resume audiobook
+            audioPlayer.addEventListener('ended', function resumeAudiobook() {
+                // Remove this listener to avoid duplicates
+                audioPlayer.removeEventListener('ended', resumeAudiobook);
+                
+                // Switch back to audiobook
+                audioPlayer.src = '/audio/output_small.mp3';
+                audioPlayer.currentTime = bookmarkPosition;
+                audioPlayer.play();
+                addMessage("Response finished, resuming audiobook...");
+            }, { once: true });  // Use once:true as alternative to manual removal
+
+            audioPlayer.play();
+        });
+
+        function clearMessageLog() {
+            const statusLine = messageLog.querySelector('.status-bar');
+            messageLog.innerHTML = '';
+            messageLog.appendChild(statusLine);
+        }
+
+        let isListening = false;
+
+        questionBtn.addEventListener('click', () => {
+            if (!isListening) {
+                // Start question workflow
+                audioPlayer.pause();  // Pause audio first
+                playback_active = false;
+                progressBar.disabled = false;
+                clearMessageLog();
+                addMessage('Starting question workflow...');
+                isListening = true;
+                questionBtn.innerHTML = '<i class="fas fa-stop"></i>';
+                socket.emit('ask_question', {
+                    current_time: audioPlayer.currentTime  // Send current time to server
+                }, (response) => {
+                    updateStatus(`Status: ${response.status}`);
+                    updateButtonStates('questioning');
+                });
+            } else {
+                // Stop listening and process question immediately
+                isListening = false;
+                questionBtn.innerHTML = '<i class="fas fa-question"></i>';
+                socket.emit('stop_question', {}, (response) => {
+                    listeningIndicator.style.display = 'none';
+                });
+            }
+        });
+
+        // Add handlers for listening state
+        socket.on('start_listening', () => {
+            listeningIndicator.style.display = 'inline-block';
+            isListening = true;
+            questionBtn.innerHTML = '<i class="fas fa-stop"></i>';
+        });
+
+        socket.on('stop_listening', () => {
+            listeningIndicator.style.display = 'none';
+            isListening = false;
+            questionBtn.innerHTML = '<i class="fas fa-question"></i>';
+        });
+
+        // Initialize button states
+        updateButtonStates('stopped');
+
+        socket.on('playback_update', (data) => {
+            updateStatus(`Status: ${data.status} (${data.position}s)`);
+        });
+
+        function addMessage(message, clickable = false) {
+            const p = document.createElement('p');
+            p.textContent = message;
+            if (clickable) {
+                p.style.cursor = 'pointer';
+                p.style.color = '#007bff';
+            }
+            messageLog.appendChild(p);
+            messageLog.scrollTop = messageLog.scrollHeight;
+        }
+
+        socket.on('status_update', (data) => {
+            addMessage(data.message);
+        });
+
+        const progressBar = document.getElementById('progressBar');
+        const currentTimeDisplay = document.getElementById('currentTime');
+        const durationDisplay = document.getElementById('duration');
+        let audioDuration = 0;
+
+        function formatTime(seconds) {
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = Math.floor(seconds % 60);
+            return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+        }
+
+        socket.on('time_update', (data) => {
+            currentTimeDisplay.textContent = formatTime(data.current_time);
+            if (!progressBar.disabled) {
+                progressBar.value = data.current_time;
+            }
+            if (audioDuration === 0) {
+                audioDuration = data.duration;
+                progressBar.max = audioDuration;
+                durationDisplay.textContent = formatTime(audioDuration);
+            }
+        });
+
+        progressBar.addEventListener('mousedown', (e) => {
+            if (playback_active) {
+                e.preventDefault();
+                modal.classList.add('show');
+                return false;
+            }
+        });
+
+        progressBar.addEventListener('input', (e) => {
+            if (!playback_active) {
+                const newTime = parseInt(e.target.value);
+                currentTimeDisplay.textContent = formatTime(newTime);
+            }
+        });
+
+        progressBar.addEventListener('change', (e) => {
+            if (!playback_active) {
+                const timestamp = parseInt(e.target.value);
+                audioPlayer.currentTime = timestamp;  // Update audio player position
+                currentTimeDisplay.textContent = formatTime(timestamp);
+                addMessage(`Jumped to ${formatTime(timestamp)}`);
+            }
+        });
+
+        // Update seeking with keyboard arrows
+        progressBar.addEventListener('keydown', (e) => {
+            if (!playback_active) {
+                let newTime = parseInt(progressBar.value);
+                if (e.key === 'ArrowRight') {
+                    newTime = Math.min(audioDuration, newTime + 5);
+                } else if (e.key === 'ArrowLeft') {
+                    newTime = Math.max(0, newTime - 5);
+                }
+                audioPlayer.currentTime = newTime;
+                progressBar.value = newTime;
+                currentTimeDisplay.textContent = formatTime(newTime);
+            }
+        });
+
+        let bookmarks = [];
+        
+        function loadBookmarks() {
+            socket.emit('get_bookmarks', {}, (response) => {
+                bookmarks = response.bookmarks;
+                renderBookmarks();
+            });
+        }
+        
+        function renderBookmarks() {
+            const bookmarksList = document.getElementById('bookmarksList');
+            bookmarksList.innerHTML = '';
+            
+            bookmarks.sort((a, b) => a.timestamp - b.timestamp).forEach(bookmark => {
+                const div = document.createElement('div');
+                div.className = 'bookmark-item';
+                div.innerHTML = `
+                    <span>${bookmark.title} (${formatTime(bookmark.timestamp)})</span>
+                    <div class="bookmark-controls">
+                        <button onclick="jumpToBookmark(${bookmark.timestamp})">Jump</button>
+                        <button onclick="deleteBookmark(${bookmark.timestamp})">Delete</button>
+                    </div>
+                `;
+                bookmarksList.appendChild(div);
+            });
+        }
+        
+        document.getElementById('addBookmarkBtn').addEventListener('click', () => {
+            const title = document.getElementById('bookmarkTitle').value;
+            if (title) {
+                const timestamp = Math.floor(audioPlayer.currentTime);
+                socket.emit('add_bookmark', {
+                    title: title,
+                    timestamp: timestamp
+                }, (response) => {
+                    bookmarks = response.bookmarks;
+                    renderBookmarks();
+                    document.getElementById('bookmarkTitle').value = '';
+                });
+            }
+        });
+        
+        function deleteBookmark(timestamp) {
+            socket.emit('delete_bookmark', {timestamp}, (response) => {
+                bookmarks = response.bookmarks;
+                renderBookmarks();
+            });
+        }
+        
+        function jumpToBookmark(timestamp) {
+            audioPlayer.currentTime = timestamp;
+            currentTimeDisplay.textContent = formatTime(timestamp);
+            addMessage(`Jumped to bookmark at ${formatTime(timestamp)}`);
+        }
+        
+        // Load bookmarks when page loads
+        loadBookmarks();
+
+        const speedButtons = document.querySelectorAll('.speed-btn');
+        
+        // Initialize speed buttons state
+        socket.emit('get_speed_status', {}, (response) => {
+            if (response.status === 'success') {
+                updateSpeedButtons(response.ready);
+            }
+        });
+        
+        function updateSpeedButtons(readyStatus) {
+            speedButtons.forEach(btn => {
+                const speed = parseFloat(btn.dataset.speed);
+                if (speed === 1.0) {
+                    btn.disabled = false;
+                } else {
+                    btn.disabled = !readyStatus[speed];
+                }
+            });
+        }
+        
+        speedButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                if (!btn.disabled) {
+                    const speed = parseFloat(btn.dataset.speed);
+                    audioPlayer.playbackRate = speed;
+                    speedButtons.forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    addMessage(`Changed playback speed to ${speed}x`);
+                    
+                    // Update audio source if needed
+                    if (speed !== 1.0) {
+                        const currentTime = audioPlayer.currentTime;
+                        audioPlayer.src = `/audio/output_small_${speed}x.mp3`;
+                        audioPlayer.currentTime = currentTime;
+                        if (playback_active) {
+                            audioPlayer.play();
+                        }
+                    }
+                }
+            });
+        });
+
+        const skipBackward = document.getElementById('skipBackward');
+        const skipForward = document.getElementById('skipForward');
+        const SKIP_SECONDS = 30;
+
+        skipBackward.addEventListener('click', () => {
+            const newTime = Math.max(0, audioPlayer.currentTime - SKIP_SECONDS);
+            audioPlayer.currentTime = newTime;
+            currentTimeDisplay.textContent = formatTime(newTime);
+            addMessage(`Jumped back 30 seconds`);
+        });
+
+        skipForward.addEventListener('click', () => {
+            const newTime = Math.min(audioDuration, audioPlayer.currentTime + SKIP_SECONDS);
+            audioPlayer.currentTime = newTime;
+            currentTimeDisplay.textContent = formatTime(newTime);
+            addMessage(`Jumped forward 30 seconds`);
+        });
+
+        const modal = document.getElementById('dragModal');
+        const closeModal = document.getElementById('closeModal');
+
+        closeModal.addEventListener('click', () => {
+            modal.classList.remove('show');
+        });
+
+        // Add playback state tracking
+        let playback_active = false;
+
+        // Ensure audio loads properly
+        audioPlayer.addEventListener('loadedmetadata', () => {
+            audioDuration = audioPlayer.duration;
+            progressBar.max = audioDuration;
+            durationDisplay.textContent = formatTime(audioDuration);
+            console.log("Audio metadata loaded, duration:", audioDuration);
+        });
+
+        audioPlayer.addEventListener('error', (e) => {
+            console.error("Audio player error:", e);
+            addMessage("Error loading audio. Please refresh the page.");
+        });
+
+        // Add connection status handling
+        socket.on('connect_error', (error) => {
+            console.error("Socket connection error:", error);
+            addMessage("Lost connection to server. Please refresh the page.");
+        });
+
+        socket.on('reconnect', (attemptNumber) => {
+            console.log("Reconnected to server after", attemptNumber, "attempts");
+            addMessage("Reconnected to server!");
+        });
+    </script>
+</body>
+</html> 

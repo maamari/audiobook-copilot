@@ -10,15 +10,7 @@ An interactive audiobook player with real-time AI-powered question answering cap
 - Automatic content transcription
 - Position tracking and bookmarking
 - 30-second navigation controls
-
-## Requirements
-
-- Python 3.8+
-- FFmpeg
-- OpenAI API key
-- Microphone
-- MP3 audiobook file
-
+  
 ## Quick Start
 
 1. Install dependencies:

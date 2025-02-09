@@ -43,7 +43,7 @@ python audioplayer.py
 ```bash
 ngrok http 5000
 ```
-Use the generated URL (e.g., https://your-id.ngrok.io)
+Use the generated URL (e.g., https://your-id.ngrok.io) on your device (laptop, phone, etc.)
 
 ## First-Time Setup Process
 

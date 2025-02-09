@@ -39,7 +39,29 @@ python audioplayer.py
 
 4. Access interface:
 - Local: http://localhost:5000
-- Remote: Configure ngrok for external access
+- Remote: Set up ngrok
+```bash
+ngrok http 5000
+```
+Use the generated URL (e.g., https://your-id.ngrok.io)
+
+## First-Time Setup Process
+
+On initial launch, the system performs several one-time operations:
+
+1. **Transcript Generation** (~5-10 minutes)
+   - Splits audiobook into 30-second chunks
+   - Transcribes each chunk in parallel
+   - Creates searchable transcript.json
+
+2. **Speed Variants** (~2-3 minutes)
+   - Generates 1.25x version
+   - Generates 1.5x version
+   - Speed controls unlock when ready
+
+These processes run in the background and only occur once per audiobook. Subsequent launches will use the cached files for instant startup.
+
+Monitor the message log for progress updates during initialization.
 
 ## Technical Architecture
 

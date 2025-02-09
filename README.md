@@ -31,11 +31,7 @@ python audioplayer.py
 
 4. Access interface:
 - To use on laptop, navigate to http://localhost:5000
-- To use on phone, run
-```bash
-ngrok http 5000
-```
-and navigate to the generated URL (e.g., https://your-id.ngrok.io)
+- To use on phone, run `ngrok http 5000` and navigate to the generated URL (e.g., https://your-id.ngrok.io)
 
 ## First-Time Setup Process
 

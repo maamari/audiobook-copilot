@@ -1,5 +1,3 @@
-> **Note**: This entire project, including all code, documentation, the following README, and this disclaimer was generated with the assistance of AI (Claude 3.5 Sonnet). Karime Maamari does not take responsibility for any errors, inaccuracies, or potential issues that may arise from using this AI-generated code. Use at your own discretion.
-
 # Audiobook Copilot
 
 An interactive audiobook player with real-time AI-powered question answering capabilities. Integrates voice input, audio transcription, and contextual understanding to provide immediate answers about audiobook content.

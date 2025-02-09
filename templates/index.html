@@ -651,7 +651,12 @@
 
         function addMessage(message, clickable = false) {
             const p = document.createElement('p');
-            p.textContent = message;
+            if (message.startsWith('Changed playback speed')) {
+                // Just show simple speed change message
+                p.textContent = message;
+            } else {
+                p.textContent = message;
+            }
             if (clickable) {
                 p.style.cursor = 'pointer';
                 p.style.color = '#007bff';
@@ -804,24 +809,39 @@
             });
         }
         
+        // Add global variable to track previous speed
+        let oldSpeedRef = 1.0;
+
         speedButtons.forEach(btn => {
             btn.addEventListener('click', () => {
                 if (!btn.disabled) {
-                    const speed = parseFloat(btn.dataset.speed);
-                    audioPlayer.playbackRate = speed;
+                    const newSpeed = parseFloat(btn.dataset.speed);
+                    const oldSpeed = audioPlayer.playbackRate;
+                    const currentTime = audioPlayer.currentTime;
+                    const speedRatio = newSpeed/oldSpeed;
+                    const newPosition = currentTime / speedRatio;
+                    
+                    // Update audio source first
+                    if (newSpeed === 1.0) {
+                        audioPlayer.src = '/audio/output_small.mp3';
+                    } else {
+                        audioPlayer.src = `/audio/output_small_${newSpeed}x.mp3`;
+                    }
+                    
+                    // Set new position
+                    audioPlayer.currentTime = newPosition;
+                    
+                    // Update speed and UI last
+                    audioPlayer.playbackRate = newSpeed;
                     speedButtons.forEach(b => b.classList.remove('active'));
                     btn.classList.add('active');
-                    addMessage(`Changed playback speed to ${speed}x`);
+                    addMessage(`Changed playback speed to ${newSpeed}x`);
                     
-                    // Update audio source if needed
-                    if (speed !== 1.0) {
-                        const currentTime = audioPlayer.currentTime;
-                        audioPlayer.src = `/audio/output_small_${speed}x.mp3`;
-                        audioPlayer.currentTime = currentTime;
-                        if (playback_active) {
-                            audioPlayer.play();
-                        }
+                    if (playback_active) {
+                        audioPlayer.play();
                     }
+                    
+                    oldSpeedRef = oldSpeed;
                 }
             });
         });
